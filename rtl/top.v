@@ -144,6 +144,7 @@ end
 
     assign trready          = drready && (draddr[31:28] == MMIO_BASE);
     assign traddr           = draddr;
+   // printf("top module");
 
     clint clint(
         .clk                (clk),

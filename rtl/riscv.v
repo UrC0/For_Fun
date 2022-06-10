@@ -64,6 +64,41 @@ module riscv (
 `define IF_NEXT_PC (4)
 `define EX_NEXT_PC (4)
 
+// PARAMETERS FOR BRANCH PREDICTOR
+
+   // // SIGNALS  FOR BRANCH PREDICTION
+
+     wire                      predict_taken;
+     wire                      predict_ntaken;
+     wire                      misprediction;
+        
+     wire  [31:0]              predicted_pc;
+   
+  
+// BRANCH PREDICTOR INSTANTIATION
+branch_predictor
+ 	
+	pred_inst
+  	( .clk(clk), 
+	  .rst(resetb),
+          .PC(fetch_pc),
+    	  .ex_pc(ex_pc), 
+          .predict_taken(predict_taken),
+	  .predict_ntaken(predict_ntaken),
+	  .ex_branch(ex_branch),
+          .branch_taken(branch_taken),
+          .ex_imm(ex_imm),
+          .ex_flush(ex_flush),
+          .predicted_pc(predicted_pc)
+          
+  	);
+
+
+
+
+
+
+
     reg                     stall_r;
     wire            [31: 0] inst;
     reg                     flush;
@@ -174,7 +209,6 @@ assign dmem_wdata           = wb_wdata;
 assign dmem_wstrb           = wb_wstrb;
 
 always @(posedge clk or negedge resetb) begin
-//$display("dmem_waddr in rtl %x ", dmem_waddr);
     if (!resetb)
         exception           <= 1'b0;
     else if (ex_inst_ill_excp || ex_inst_align_excp ||
@@ -373,12 +407,18 @@ assign alu_op2[31: 0]       = (ex_imm_sel) ? ex_imm : reg_rdata2;
 assign result_subs[32: 0]   = {alu_op1[31], alu_op1} - {alu_op2[31], alu_op2};
 assign result_subu[32: 0]   = {1'b0, alu_op1} - {1'b0, alu_op2};
 assign ex_memaddr           = alu_op1 + ex_imm;
-assign ex_flush             = wb_branch || wb_branch_nxt;
+assign ex_flush             =  wb_branch || wb_branch_nxt  || misprediction;       //CHANGE
+assign misprediction        = (ex_branch) ? ((predict_taken &&  ~branch_taken) || (predict_ntaken &&  branch_taken)): 1'b0;   ////CHANGE
+ 
+// OUR UNDERSTANDING IS THAT ITS ONLY HIGH WHEN THE FINAL RESOLUTION OF THE BRANCH IS NOT-TAKEN
+// FLUSH SHOULD BE FIRED WHENEVER THERE IS A MIS-PREDICTION
+// N-ORDER TO DO SO, WE NEED TO MAKE A SIGNAL THAT IS GOING TO TELL US WHAT THE PREDICTION 
+	// FROM THE ifu WAS AND IS IT TRUE?
 assign ex_systemcall        = ex_system && !ex_flush;
 
 always @* begin
-    branch_taken  = !ex_flush;
-    next_pc       = fetch_pc + `IF_NEXT_PC;
+    branch_taken  = 1'b0;    //CHANGE
+    next_pc     = fetch_pc + `IF_NEXT_PC;
     ex_ill_branch = 1'b0;
 
     case(1'b1)
@@ -387,44 +427,44 @@ always @* begin
         ex_branch: begin
             case(ex_alu_op)
                 OP_BEQ : begin
-                            next_pc = (result_subs[32: 0] == 'd0) ?
+                            next_pc = /*DID I MISPREDICT?*/ (result_subs[32: 0] == 'd0) /* ~ WHAT DID I SENT */?
                                       ex_pc + ex_imm : fetch_pc + `IF_NEXT_PC;
-                            if (result_subs[32: 0] != 'd0) branch_taken = 1'b0;
+                            if (result_subs[32: 0] != 'd0) branch_taken = 1'b0;else branch_taken = 1'b1;    //CHANGE
                          end
                 OP_BNE : begin
                             next_pc = (result_subs[32: 0] != 'd0) ?
                                       ex_pc + ex_imm : fetch_pc + `IF_NEXT_PC;
-                            if (result_subs[32: 0] == 'd0) branch_taken = 1'b0;
+                            if (result_subs[32: 0] == 'd0) branch_taken = 1'b0;else branch_taken = 1'b1;    //CHANGE
                          end
                 OP_BLT : begin
                             next_pc = result_subs[32] ?
                                       ex_pc + ex_imm : fetch_pc + `IF_NEXT_PC;
-                            if (!result_subs[32]) branch_taken = 1'b0;
+                            if (!result_subs[32]) branch_taken = 1'b0;else branch_taken = 1'b1;     //CHANGE
                          end
                 OP_BGE : begin
                             next_pc = !result_subs[32] ?
                                       ex_pc + ex_imm : fetch_pc + `IF_NEXT_PC;
-                            if (result_subs[32]) branch_taken = 1'b0;
+                            if (result_subs[32]) branch_taken = 1'b0;else branch_taken = 1'b1;   //CHANGE
                          end
                 OP_BLTU: begin
                             next_pc = result_subu[32] ?
                                       ex_pc + ex_imm : fetch_pc + `IF_NEXT_PC;
-                            if (!result_subu[32]) branch_taken = 1'b0;
+                            if (!result_subu[32]) branch_taken = 1'b0;else branch_taken = 1'b1;   //CHANGE
                          end
                 OP_BGEU: begin
                             next_pc = !result_subu[32] ?
                                       ex_pc + ex_imm : fetch_pc + `IF_NEXT_PC;
-                            if (result_subu[32]) branch_taken = 1'b0;
+                            if (result_subu[32]) branch_taken = 1'b0;else branch_taken = 1'b1;   //CHANGE
                          end
                 default: begin
-                         next_pc    = fetch_pc;
+                         next_pc    = fetch_pc + `IF_NEXT_PC;
                          ex_ill_branch = 1'b1;
                          end
             endcase
         end
         default  : begin
-                   next_pc          = fetch_pc + `IF_NEXT_PC;
-                   branch_taken     = 1'b0;
+                    next_pc          = fetch_pc + `IF_NEXT_PC;
+                  // branch_taken     = 1'b0;     //CHANGE
                    end
     endcase
 end
@@ -511,9 +551,10 @@ always @(posedge clk or negedge resetb) begin
     if (!resetb) begin
         fetch_pc            <= RESETVEC;
     end else if (!ex_stall) begin
-        fetch_pc            <= (ex_flush) ? (fetch_pc + `EX_NEXT_PC) :
-                               (ex_trap)  ? (ex_trap_pc)   :
-                               {next_pc[31:1], 1'b0};
+        fetch_pc            <= (ex_flush) ? {next_pc[31:1], 1'b0} :     ////CHANGE
+        		       (ex_trap)  ? (ex_trap_pc)   :
+        		       (predict_taken) ? predicted_pc :
+                               (fetch_pc + `EX_NEXT_PC);
     end
 end
 
@@ -536,7 +577,7 @@ always @(posedge clk or negedge resetb) begin
                                `endif
                                (ex_mem2reg && !ex_ld_align_excp);
         wb_dst_sel          <= ex_dst_sel;
-        wb_branch           <= branch_taken || ex_trap;
+        wb_branch           <= misprediction || ex_trap;
         wb_branch_nxt       <= wb_branch;
         wb_mem2reg          <= ex_mem2reg;
         wb_raddr            <= dmem_raddr[1:0];
@@ -601,7 +642,7 @@ always @(posedge clk or negedge resetb) begin
         wb_nop              <= 1'b0;
         wb_nop_more         <= 1'b0;
     end else if (!ex_stall && !(wb_memwr && !dmem_wvalid)) begin
-        wb_nop              <= wb_branch;
+        wb_nop              <= wb_branch;   //misprediction
         wb_nop_more         <= wb_nop;
     end
 end
@@ -689,7 +730,7 @@ always @* begin
     endcase
 end
 
-assign ex_ret_pc = (ex_jal || ex_jalr || (ex_branch && branch_taken)) ? next_pc[31: 1] : ex_pc[31: 1] + 31'd2;
+assign ex_ret_pc = (ex_jal || ex_jalr || (ex_branch && branch_taken && predict_taken)) ? next_pc[31: 1] : ex_pc[31: 1] + 31'd2;  ///CHANGE
 
 always @(posedge clk or negedge resetb) begin
     if (!resetb) begin

@@ -28,7 +28,7 @@
 `define RS2         24:20
 `define IMM12       31:20
 
-localparam  [31: 0] RESETVEC   = 32'h8000_0000;
+localparam  [31: 0] RESETVEC   = 32'h0000_0000;
 
 localparam  [31: 0] NOP        = 32'h0000_0013;     // addi x0, x0, 0
 
