@@ -1,11 +1,11 @@
 OUTPUT_ARCH( "riscv" )
 ENTRY(_start)
-_start = 0;
+_start = 0x8000000;
 
 MEMORY
 {
-  imem : ORIGIN = 0x00000000,       LENGTH = 128K
-  dmem : ORIGIN = 0x00000000 +128K, LENGTH = 128K
+  imem : ORIGIN = 0x80000000,       LENGTH = 128K
+  dmem : ORIGIN = 0x80000000 +128K , LENGTH = 128K
 }
 
 SECTIONS
@@ -74,7 +74,7 @@ SECTIONS
     _end        = .;
   } > dmem
 
-  PROVIDE(_stack = (128K * 2));
+  PROVIDE(_stack = 0x80000000 + (128K * 2));
 
   /DISCARD/ : { *(.note.GNU-stack) }
 

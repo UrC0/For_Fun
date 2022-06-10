@@ -112,7 +112,7 @@ CSR csr;
 int pc = 0;
 int mode = MMODE;
 int prev_pc = 0;
-int mem_base = 0;
+int mem_base = 0x80000000;
 int singleram = 0;
 int branch_penalty = BRANCH_PENALTY;
 int mtime_update = 0;
@@ -914,8 +914,8 @@ int main(int argc, char **argv) {
                         if (inst.i.func3 == OP_SB ||
                             inst.i.func3 == OP_SH ||
                             inst.i.func3 == OP_SW) {
-                            printf("Unknown address 0x%08x to write at PC 0x%08x\n",
-                                   address, pc);
+                            printf("Unknown address 0x%08x to write at PC 0x%08x\n, DMEM_BASE %x, DMEM_SIZE %x",
+                                   address, pc, DMEM_BASE, DMEM_SIZE);
                             TRACE_LOG "\n" TRACE_END;
                             TRAP(TRAP_ST_FAIL, address);
                             continue;

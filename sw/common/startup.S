@@ -1,13 +1,18 @@
     .section .reset, "ax"
     .global _start
+    
 _start:
+	    
     la      t0, trap_handler
     csrw    mtvec, t0
     csrrsi  zero, mtvec, 1      // set vector based trap
 
     la      t0, _bss_start
     la      t1, _bss_end
-
+    
+    la      t3, tohost
+    li      t2, 1
+    sw      t2, 0(t3)
 _bss_clear:
     sw      zero,0(t0)
     addi    t0, t0, 4
@@ -19,6 +24,13 @@ _bss_clear:
 
     .section .text.trap, "ax"
     .align 4
+    .section .tohost, "aw", @progbits
+   .globl tohost
+   .align 4
+   tohost: .dword 0
+   .globl fromhost
+   .align 4
+   fromhost: .dword 0
 trap_handler:
     jal     x0, _trap_handler       // 0: Instruction address misaligned
     jal     x0, _trap_handler       // 1: Instruction access fault
