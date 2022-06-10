@@ -2,8 +2,8 @@
 #include <unistd.h>
 
 int main(void) {
-    char c;
-    printf("Enter character (enter to exit): ");
+    char c =;
+    //printf("Enter character (enter to exit): ");
     fflush(stdout);
     do {
         size_t ret = read(STDIN_FILENO, &c, 1);

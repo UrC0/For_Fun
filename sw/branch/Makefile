@@ -2,10 +2,10 @@
 include ../common/Makefile.common
 
 EXE      = .elf
-SRC      = hello_backup.S
+SRC      = test.S
 CFLAGS  += -L../common
 LDFLAGS += -T ../common/default.ld
-TARGET   = hello
+TARGET   = test
 OUTPUT   = $(TARGET)$(EXE)
 
 .PHONY: all clean

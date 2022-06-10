@@ -174,6 +174,7 @@ assign dmem_wdata           = wb_wdata;
 assign dmem_wstrb           = wb_wstrb;
 
 always @(posedge clk or negedge resetb) begin
+//$display("dmem_waddr in rtl %x ", dmem_waddr);
     if (!resetb)
         exception           <= 1'b0;
     else if (ex_inst_ill_excp || ex_inst_align_excp ||

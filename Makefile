@@ -2,22 +2,19 @@
 ifndef CROSS_COMPILER
 export CROSS_COMPILER = riscv64-unknown-elf-
 endif
-
 dirs        = $(dir $(wildcard sw/[^_]*/))
 SUBDIRS     = $(subst /,,$(subst sw/,,$(subst common,,$(dirs))))
-
 verilator ?= 1
 top       ?= 0
 coverage  ?= 0
 debug     ?= 0
-
-# set 1 for compliance test v1, 2 for v2
+# set 1 for compliance test v1, 2 for v2  @diff --brief sim/trace.log tools/trace.log
 test_v    ?= 2
 
 # set 1 to enable rv32c
 rv32c     ?= 0
 
-# memory size requirement for compliance test
+# memory size requirement for compliance test # 
 ifeq ($(test_v), 1)
     memsize ?= 128
 else
@@ -60,6 +57,7 @@ help:
 	@echo "$ make test_v=2 tests-all    run all tests with test compliance v2"
 	@echo "$ make coverage=1 tests-all  run all tests with code coverage report"
 	@echo "$ make debug=1 hello         run hello with waveform dump"
+	@echo "$ make debug=1 _io           run"
 	@echo ""
 
 tests-all: tests-sw tests all all-sw
@@ -93,10 +91,7 @@ $(SUBDIRS):
 	@$(MAKE) $(if $(_verilator), verilator=1) \
 			 $(if $(_coverage), coverate=1) \
 			 $(if $(_top), top=1) rv32c=$(rv32c) debug=$(debug) -C sim $@.run
-	@$(MAKE) $(if $(_top), top=1) rv32c=$(rv32c) -C tools $@.run
-	@echo "Compare the trace between RTL and ISS simulator"
-	@diff --brief sim/trace.log tools/trace.log
-	@echo === Simulation passed ===
+			@$(MAKE) $(if $(_top), top=1) rv32c=$(rv32c) -C tools $@.run
 
 coverage: clean
 	@$(MAKE) rv32c=$(rv32c) coverage=1 all
@@ -122,4 +117,3 @@ distclean:
 	for i in sw sim tools tests coverage; do \
 		$(MAKE) test_v=$(test_v) -C $$i distclean; \
 	done
-

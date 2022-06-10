@@ -31,7 +31,7 @@ endif
 
 SRC      = rvsim.c decompress.c syscall.c elfread.c getch.c
 OBJECTS  = $(SRC:.c=.o)
-RVSIM   = rvsim
+RVSIM   = spike
 
 .SUFFIXS: .c .o
 
@@ -40,15 +40,20 @@ RVSIM   = rvsim
 %.o: %.c opcode.h
 	$(CC) -c -o $@ $< $(CFLAGS)
 
-$(RVSIM): $(OBJECTS)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $(RVSIM) $(OBJECTS)
-
-%.run: $(RVSIM)
-	@if [ ! -f ../sw/$*/$*.elf ]; then \
+#$(RVSIM): $(OBJECTS)
+#$(CC) $(CFLAGS) $(LDFLAGS) -o $(RVSIM) $(OBJECTS)
+#@if [ ! -f ../sw/$*/$*.elf ]; then \
 		make -C ../sw $*; \
 	fi
-	./$(RVSIM) --memsize $(memsize) -l trace.log ../sw/$*/$*.elf
-	@./log2dis.pl -q trace.log ../sw/$*/$*.elf
+#@./log2dis.pl -q trace.log ../sw/$*/$*.elf
+
+%.run:
+	
+	$(RVSIM) --log-commits -l --isa=RV32IM ../sw/$*/$*.elf 2> ../sw/$*/$*.log
+	python3 file_formatting.py   ../sw/$*/$*.log  ../sw/$*/$*_mod.log
+	sed -E '/mem 0x9000002c 0x00/,$$d' ../sw/$*/$*_mod.log > ../sw/$*/$*_spike.log
+	sed -E '/mem 0x9000002c 0x00/,$$d' ../sim/trace.log > ../sw/$*/$*_trace.log
+	python3 file_comparasion.py ../sw/$*/$*_trace.log ../sw/$*/$*_spike.log
 
 coverage: coverage_extra
 	@gcov *.c
@@ -72,3 +77,6 @@ clean:
 
 distclean: clean
 
+sed:
+	sed -e '/mem 0x9000002c 0x00/,$$d' hello_mod.log > hello_temp.log
+#	sed -E '/mem 0x9000002c 0x00$/,$d' hello_mod.log > hello_temp.log
