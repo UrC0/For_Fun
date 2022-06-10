@@ -348,7 +348,7 @@ This is the coverage report of ISS.
 ## TO-DO
 
 *   merge the memory interface into one memory for one port
-*   static branch predictor
+*   Testing branch predictor for tests made by force-riscv
 *   support RV32C compress extension
 *   serial multiplier and divider
 *   Nuttx & Zephyr porting
@@ -356,3 +356,84 @@ This is the coverage report of ISS.
 ## License
 
 MIT license
+
+	 	 	 	
+##To run .elf on spike
+    • Configure tool-chain with 32 bit arch:
+      ./configure --prefix=/opt/riscv --with-arch=rv32im –enable-multilib
+    • On core: make hello
+    • Run spike separately:
+      For spike: spike --log-commits -l --isa=RV32IM /home/akeana/proj/cores/aqlrv32-main/sw/hello/hello.elf 2> spike.log
+spike starts its simulation from instruction memory address(pc) 0x800000000 and we can’t let it start from any address less than 0x800000000. And our core’s simulation start it from 0x00000000. So we also need to start our core from 0x800000000. For this we have to make certain changes in some files. Like
+
+In testbench.v :
+	line 54: localparam IRAMBASE = 2147483648; // equivalent to 0x80000000 in hex
+	line 56: localparam DRAMBASE = 2147483648 + `MEMSIZE*1024; // 0x80020000
+
+	line 398: imem_addr[31:$clog2(IRAMSIZE)] > 15'b1000_0000_0000_000
+	line 421: dmem_waddr[31:$clog2(DRAMSIZE + IRAMSIZE)] > 14'b1000_0000_0000_00
+
+	assign temp_addrw[31:0]	= {2'b0,dmem_waddr[31:2] } - (DRAMBASE >> 2) ;
+	assign temp_addrr[31:0]	= {2'b0,dmem_raddr[31:2] } - (DRAMBASE >> 2);
+	assign temp_addri = {2'b0, imem_addr[31:2]} - (IRAMBASE >> 2);
+
+	line 371: .raddr ({2'b0,temp_addri[27:0]}),
+	line 389: .raddr ({2'b0,temp_addrr[27:0]}),
+	line 390: .waddr ({2'b0,temp_addrw[27:0]}),
+
+In aqlrv32/sw/common/default.ld:
+	_start = 0x8000000;
+
+	MEMORY
+	{
+	imem : ORIGIN = 0x80000000, LENGTH = 128K
+	dmem : ORIGIN = 0x80000000 +128K , LENGTH = 128K
+	}
+
+	line 77: PROVIDE(_stack = 0x80000000 + (128K * 2));
+
+In opcode.vh:
+	RESETVEC = 32'h8000_0000;
+
+In aqlrv32/makefile:
+	remove line 99 because we don’t need rvsim simulator.
+
+In aqlrv32/tools/makefile:
+	To run spike simulator alongwith verilator running core:
+	Line 34: RVSIM = spike
+
+in %.run:
+	$(RVSIM) --log-commits -l --isa=RV32IM ../sw/$*/$*.elf 2> ../sw/$*/$*.log
+	python3 file_formatting.py ../sw/$*/$*.log ../sw/$*/$*_mod.log
+	sed -E '/mem 0x9000002c 0x00/,$$d' ../sw/$*/$*_mod.log > ../sw/$*/$*_spike.log
+	sed -E '/mem 0x9000002c 0x00/,$$d' ../sim/trace.log > ../sw/$*/$*_trace.log
+	python3 file_comparasion.py ../sw/$*/$*_trace.log ../sw/$*/$*_spike.log
+
+In aqlrv32/sw/common/startup.S:
+	If spike hangs and can't exit add these lines in your file.
+	_start:
+	la t3, tohost
+	li t2, 1
+	sw t2, 0(t3)
+
+_bss_clear:
+	.section .tohost, "aw", @progbits
+	.globl tohost
+	.align 4
+	tohost: .dword 0
+	.globl fromhost
+	.align 4
+	fromhost: .dword 0
+
+
+##To run tests with .S file
+
+    • configure toolchain with cmodel=medany
+      ./configure --prefix=/opt/riscv --with-arch=rv32im --with-cmodel=medany –enable-multilib
+      make clean
+      make 
+    • hello/makefile
+      line 5: SRC = hello_backup.S
+    • To make addresses pc relative and not absolute in case of branch like  bne x2,x3,8
+      replace 8 with .+8
+
